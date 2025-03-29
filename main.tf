@@ -1,7 +1,22 @@
-provider "aws" {
-  region = var.aws_region
+# Generate an SSH key pair
+resource "tls_private_key" "ec2_key" {
+  algorithm = "RSA"
+  rsa_bits  = 2048
 }
 
+# Create a key pair in AWS
+resource "aws_key_pair" "ictg_key" {
+  key_name   = var.key_name
+  public_key = tls_private_key.ec2_key.public_key_openssh
+}
+
+# Store the private key locally
+resource "local_file" "ssh_key" {
+  content  = tls_private_key.ec2_key.private_key_pem
+  filename = "${path.module}/ictg_automate_key.pem"
+}
+
+# Create a security group
 resource "aws_security_group" "ictg_automate_sg" {
   name        = var.security_group_name
   description = "Allow SSH, HTTP, and necessary ports"
@@ -42,29 +57,23 @@ resource "aws_security_group" "ictg_automate_sg" {
   }
 }
 
+# Create an EC2 instance
 resource "aws_instance" "app_server" {
   ami           = var.ami_id
   instance_type = var.instance_type
-  key_name      = var.key_name
+  key_name      = aws_key_pair.ictg_key.key_name
   security_groups = [aws_security_group.ictg_automate_sg.name]
 
-  user_data = <<-EOF
-              #!/bin/bash
-              # Ensure the SSH key has correct permissions
-              chmod 400 /home/ubuntu/${var.key_name}.pem
-              
-              # Make setup script executable
-              chmod +x /home/ubuntu/app-setup.sh
-              
-              # Run the setup script with sudo
-              sudo /home/ubuntu/app-setup.sh
-              EOF
+  # Run a script during instance startup
+  user_data = file("${path.module}/app-setup.sh")
 
+  # File Provisioner to upload script
   provisioner "file" {
     source      = "app-setup.sh"
     destination = "/home/ubuntu/app-setup.sh"
   }
 
+  # Remote execution provisioner to run the script
   provisioner "remote-exec" {
     inline = [
       "chmod +x /home/ubuntu/app-setup.sh",
@@ -75,7 +84,7 @@ resource "aws_instance" "app_server" {
   connection {
     type        = "ssh"
     user        = "ubuntu"
-    private_key = file("ictg_automate_key.pem")
+    private_key = tls_private_key.ec2_key.private_key_pem
     host        = self.public_ip
   }
 
