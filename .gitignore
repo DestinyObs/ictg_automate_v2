@@ -1,0 +1,27 @@
+# Ignore Terraform state files
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+.terraform.lock.hcl
+terraform.tfvars
+
+# Ignore SSH private key
+ictg_automate_key.pem
+
+# Ignore log and temp files
+*.log
+*.tmp
+
+# Ignore environment files (if storing credentials)
+.env
+/root/.env
+
+# Ignore Terraform variable files (if they contain secrets)
+terraform.tfvars
+
+# Ignore macOS system files (if working on macOS)
+.DS_Store
+
+# Ignore Linux system files
+*.swp
+*.swo
